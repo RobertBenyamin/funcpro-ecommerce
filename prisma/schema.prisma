@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// User Model - Represents both Seller and Buyer
+// ============================================
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      UserRole
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  products      Product[]      @relation("SellerProducts")
+  carts         Cart[]
+  orders        Order[]
+  balanceEvents BalanceEvent[]
+
+  @@index([email])
+  @@index([role])
+}
+
+enum UserRole {
+  SELLER
+  BUYER
+}
+
+// ============================================
+// Product Model - Created by Sellers
+// ============================================
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  price       Int
+  stock       Int
+  sellerId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  seller    User       @relation("SellerProducts", fields: [sellerId], references: [id], onDelete: Cascade)
+  cartItems CartItem[]
+  orderItems OrderItem[]
+
+  @@index([sellerId])
+  @@index([createdAt])
+}
+
+// ============================================
+// Cart Models - Shopping cart for buyers
+// ============================================
+model Cart {
+  id        String   @id @default(cuid())
+  userId    String   @unique // One cart per user
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@index([userId])
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  productId String
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId]) // One product per cart
+  @@index([cartId])
+  @@index([productId])
+}
+
+// ============================================
+// Order Models - State machine for checkout
+// ============================================
+model Order {
+  id            String      @id @default(cuid())
+  userId        String
+  totalAmount   Int
+  status        OrderStatus
+  paymentMethod PaymentMethod?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items OrderItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Int // Price at time of purchase (snapshot)
+  createdAt DateTime @default(now())
+
+  // Relations
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// Order State Machine: Pending -> PaymentPage -> PaymentSuccess/PaymentFailed
+enum OrderStatus {
+  PENDING
+  PAYMENT_PAGE
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  BALANCE
+}
+
+// ============================================
+// Balance System - Event-based balance tracking
+// ============================================
+model BalanceEvent {
+  id        String            @id @default(cuid())
+  userId    String
+  type      BalanceEventType
+  amount    Int // positive for deposit, negative for withdrawal/payment
+  orderId   String? // Optional: link to order if this was a payment deduction
+  createdAt DateTime          @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+enum BalanceEventType {
+  DEPOSIT
+  WITHDRAWAL
+  PAYMENT_DEDUCTION
+}
