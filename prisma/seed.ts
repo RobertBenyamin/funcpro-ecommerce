@@ -60,8 +60,14 @@ async function main() {
         name: 'Wireless Mouse',
         description: 'Ergonomic wireless mouse with USB receiver',
         price: 2500, // $25.00
-        stock: 50,
         sellerId: seller1.id,
+        stockEvents: {
+          create: {
+            type: 'INITIAL',
+            quantity: 50,
+            reason: 'Initial stock',
+          },
+        },
       },
     }),
     prisma.product.create({
@@ -69,8 +75,14 @@ async function main() {
         name: 'Mechanical Keyboard',
         description: 'RGB mechanical keyboard with blue switches',
         price: 8900, // $89.00
-        stock: 30,
         sellerId: seller1.id,
+        stockEvents: {
+          create: {
+            type: 'INITIAL',
+            quantity: 30,
+            reason: 'Initial stock',
+          },
+        },
       },
     }),
     prisma.product.create({
@@ -78,8 +90,14 @@ async function main() {
         name: 'USB-C Cable',
         description: '2m braided USB-C charging cable',
         price: 1200, // $12.00
-        stock: 100,
         sellerId: seller1.id,
+        stockEvents: {
+          create: {
+            type: 'INITIAL',
+            quantity: 100,
+            reason: 'Initial stock',
+          },
+        },
       },
     }),
     prisma.product.create({
@@ -87,8 +105,14 @@ async function main() {
         name: 'Laptop Stand',
         description: 'Aluminum adjustable laptop stand',
         price: 4500, // $45.00
-        stock: 25,
         sellerId: seller1.id,
+        stockEvents: {
+          create: {
+            type: 'INITIAL',
+            quantity: 25,
+            reason: 'Initial stock',
+          },
+        },
       },
     }),
   ]);
@@ -100,8 +124,14 @@ async function main() {
         name: 'Cotton T-Shirt',
         description: 'Premium cotton t-shirt, available in multiple colors',
         price: 1999, // $19.99
-        stock: 80,
         sellerId: seller2.id,
+        stockEvents: {
+          create: {
+            type: 'INITIAL',
+            quantity: 80,
+            reason: 'Initial stock',
+          },
+        },
       },
     }),
     prisma.product.create({
@@ -109,8 +139,14 @@ async function main() {
         name: 'Denim Jeans',
         description: 'Classic fit denim jeans',
         price: 5999, // $59.99
-        stock: 40,
         sellerId: seller2.id,
+        stockEvents: {
+          create: {
+            type: 'INITIAL',
+            quantity: 40,
+            reason: 'Initial stock',
+          },
+        },
       },
     }),
     prisma.product.create({
@@ -118,8 +154,14 @@ async function main() {
         name: 'Sneakers',
         description: 'Comfortable everyday sneakers',
         price: 7999, // $79.99
-        stock: 35,
         sellerId: seller2.id,
+        stockEvents: {
+          create: {
+            type: 'INITIAL',
+            quantity: 35,
+            reason: 'Initial stock',
+          },
+        },
       },
     }),
   ]);

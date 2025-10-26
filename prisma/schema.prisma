@@ -42,15 +42,15 @@ model Product {
   name        String
   description String
   price       Int
-  stock       Int
   sellerId    String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
-  seller    User       @relation("SellerProducts", fields: [sellerId], references: [id], onDelete: Cascade)
-  cartItems CartItem[]
-  orderItems OrderItem[]
+  seller       User         @relation("SellerProducts", fields: [sellerId], references: [id], onDelete: Cascade)
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  stockEvents  StockEvent[]
 
   @@index([sellerId])
   @@index([createdAt])
@@ -137,6 +137,31 @@ enum OrderStatus {
 enum PaymentMethod {
   BANK_TRANSFER
   BALANCE
+}
+
+// ============================================
+// Stock Management - Event-based immutable stock tracking
+// ============================================
+model StockEvent {
+  id        String      @id @default(cuid())
+  productId String
+  type      StockEventType
+  quantity  Int // positive for additions, negative for reservations
+  reason    String? // e.g., "Initial stock", "Reservation for order #123"
+  createdAt DateTime    @default(now())
+
+  // Relations
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([createdAt])
+}
+
+enum StockEventType {
+  INITIAL
+  RESERVATION
+  CANCELLATION
+  RESTOCK
 }
 
 // ============================================
