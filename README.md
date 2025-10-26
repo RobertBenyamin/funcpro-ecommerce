@@ -167,6 +167,7 @@ Content-Type: application/json
   "sellerId": "cmh837t2e00017kfs5guwauz9"
 }
 ```
+*Note: The `stock` parameter creates an INITIAL StockEvent. Stock is managed immutably via `/stock-events` API.*
 
 **4. Reserve Stock (Atomic)** ✅
 ```
@@ -228,9 +229,9 @@ curl -X POST http://localhost:3000/api/products \
   }'
 
 # Reserve stock
-curl -X POST http://localhost:3000/api/products/:id/reserve \
+curl -X POST http://localhost:3000/api/products/:id/stock-events \
   -H "Content-Type: application/json" \
-  -d '{ "quantity": 5 }'
+  -d '{ "type": "RESERVATION", "quantity": -5, "reason": "Order #123" }'
 
 # Update product
 curl -X PATCH http://localhost:3000/api/products/:id \
@@ -238,7 +239,145 @@ curl -X PATCH http://localhost:3000/api/products/:id \
   -d '{ "price": 3999 }'
 
 # Delete product
+# Delete product
 curl -X DELETE http://localhost:3000/api/products/:id
+```
+
+### Stock Events API
+
+The Stock Events API provides immutable event-based stock management with complete audit trail.
+
+**Endpoints:**
+
+**1. Calculate Current Stock**
+```
+GET /api/products/:id/stock
+```
+Returns the current calculated stock level for a product.
+
+**Response:**
+```json
+{
+  "productId": "cmh8542sp00027kxcz3ne0622",
+  "productName": "Wireless Mouse",
+  "currentStock": 14,
+  "totalEvents": 4,
+  "lastUpdated": "2025-10-26T20:04:12.004Z"
+}
+```
+
+**2. Get Stock Events for a Product**
+```
+GET /api/products/:id/stock-events
+```
+Returns all stock events and current calculated stock.
+
+**Response:**
+```json
+{
+  "productId": "cmh8542sp00027kxcz3ne0622",
+  "currentStock": 14,
+  "totalEvents": 4,
+  "events": [
+    {
+      "id": "event_id_1",
+      "productId": "cmh8542sp00027kxcz3ne0622",
+      "type": "INITIAL",
+      "quantity": 10,
+      "reason": "Initial stock",
+      "createdAt": "2025-10-26T20:04:08.360Z"
+    },
+    {
+      "id": "event_id_2",
+      "productId": "cmh8542sp00027kxcz3ne0622",
+      "type": "RESERVATION",
+      "quantity": -3,
+      "reason": "Reservation for 3 units",
+      "createdAt": "2025-10-26T20:04:09.729Z"
+    }
+  ]
+}
+```
+
+**2. Record a Stock Event**
+```
+POST /api/products/:id/stock-events
+Content-Type: application/json
+
+{
+  "type": "RESERVATION | CANCELLATION | RESTOCK",
+  "quantity": -5,
+  "reason": "Optional reason"
+}
+```
+
+**Event Types:**
+- `RESERVATION`: Reduce stock (quantity negative, e.g., -5)
+- `RESTOCK`: Add stock (quantity positive, e.g., 10)
+- `CANCELLATION`: Restore stock (quantity positive, e.g., 2)
+
+**Response:**
+```json
+{
+  "success": true,
+  "event": {
+    "id": "event_id_new",
+    "productId": "cmh8542sp00027kxcz3ne0622",
+    "type": "RESERVATION",
+    "quantity": -5,
+    "reason": "Order #123",
+    "createdAt": "2025-10-26T20:04:15.000Z"
+  },
+  "currentStock": 9
+}
+```
+
+**Test Examples:**
+```bash
+# Get current stock (simple calculation)
+curl http://localhost:3000/api/products/{id}/stock
+
+# Get stock history (with all events)
+curl http://localhost:3000/api/products/{id}/stock-events
+
+# Reserve stock (reserve 5 units)
+curl -X POST http://localhost:3000/api/products/{id}/stock-events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "RESERVATION",
+    "quantity": -5,
+    "reason": "Order #123"
+  }'
+
+# Restock (add 10 units)
+curl -X POST http://localhost:3000/api/products/{id}/stock-events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "RESTOCK",
+    "quantity": 10,
+    "reason": "Warehouse delivery"
+  }'
+
+# Cancel reservation (restore 2 units)
+curl -X POST http://localhost:3000/api/products/{id}/stock-events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "CANCELLATION",
+    "quantity": 2,
+    "reason": "Customer cancellation"
+  }'
+```
+
+**Key Features:**
+- ✅ Immutable Event Sourcing - All stock changes recorded as events, never mutated
+- ✅ Complete Audit Trail - Full history with timestamps and reasons
+- ✅ Pure Functional Calculation - Stock computed via fold over events
+- ✅ No Race Conditions - Event recording is atomic and sequential
+- ✅ Historical Replay - Can replay events to see stock at any point in time
+
+See [`API_STOCK_EVENTS.md`](./API_STOCK_EVENTS.md) for detailed API documentation.
+
+#### Product Service Functions
 ```
 
 ## 🔑 Key Functional Programming Concepts

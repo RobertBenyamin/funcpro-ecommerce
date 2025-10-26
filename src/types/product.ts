@@ -18,7 +18,7 @@ export type CreateProductRequest = {
   name: string;
   description: string;
   price: number;
-  stock: number;
+  stock: number; // Initial stock - converted to INITIAL StockEvent
 };
 
 // Stock Event types for pure functional operations
