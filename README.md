@@ -34,8 +34,14 @@ This project showcases functional programming concepts in a full-stack TypeScrip
 - Relations: products, carts, orders, balanceEvents
 
 #### **Product**
-- Fields: name, description, price (cents), stock
+- Fields: name, description, price (cents)
+- Stock managed immutably via StockEvent records
 - Managed by sellers
+
+#### **StockEvent**
+- Event sourcing pattern for immutable stock tracking
+- Types: `INITIAL` | `RESERVATION` | `CANCELLATION` | `RESTOCK`
+- Stock calculated via pure fold over all events
 
 #### **Cart & CartItem**
 - One cart per user
@@ -120,6 +126,260 @@ After seeding, you'll have:
 - `buyer1@example.com` - $500 balance
 - `buyer2@example.com` - ~$120 balance (after order)
 
+## 📚 API Documentation
+
+### Product API
+
+Complete API documentation for the Product Module. All endpoints are implemented and ready for production use.
+
+#### Base URL
+```
+http://localhost:3000/api
+```
+
+#### Authentication
+Currently no authentication required (add as needed).
+
+#### Endpoints
+
+**1. List Products**
+```
+GET /api/products?skip=0&take=50
+```
+Returns paginated products list.
+
+**2. Get Product by ID**
+```
+GET /api/products/:id
+```
+Returns product with seller information.
+
+**3. Create Product** ✅
+```
+POST /api/products
+Content-Type: application/json
+
+{
+  "name": "New Widget",
+  "description": "A shiny new widget",
+  "price": 2999,
+  "stock": 50,
+  "sellerId": "cmh837t2e00017kfs5guwauz9"
+}
+```
+*Note: The `stock` parameter creates an INITIAL StockEvent. Stock is managed immutably via `/stock-events` API.*
+
+**4. Reserve Stock (Atomic)** ✅
+```
+POST /api/products/:id/reserve
+Content-Type: application/json
+
+{ "quantity": 10 }
+```
+Atomically decrements stock. Returns 409 if insufficient stock.
+
+**5. Update Product (PATCH)** ✅
+```
+PATCH /api/products/:id
+Content-Type: application/json
+
+{ "price": 3499, "name": "Updated Widget" }
+```
+
+**6. Delete Product** ✅
+```
+DELETE /api/products/:id
+```
+
+#### Implementation Details
+
+**Service Layer** (`src/lib/product.ts`)
+- `createProduct(data, sellerId)` - Creates product with initial stock
+- `getProductById(id)` - Fetches product with seller info
+- `listProducts(skip, take)` - Paginates products
+- `updateProduct(id, data)` - Partial update with type validation
+- `deleteProduct(id)` - Removes product
+- `getCurrentStock(productId)` - Returns current stock level
+- `reserveStock(productId, quantity)` - Atomic stock reservation
+
+**Key Features**
+- ✅ Atomic Stock Reservation - Uses conditional updateMany to prevent race conditions
+- ✅ Type Safety - Full TypeScript with Prisma types
+- ✅ Pagination - Built-in skip/take parameters
+- ✅ Seller Relations - Products include seller info on fetch
+- ✅ Error Handling - Proper HTTP status codes (400, 404, 409, 500)
+
+#### Test APIs Locally
+```bash
+# List products
+curl http://localhost:3000/api/products
+
+# Get product
+curl http://localhost:3000/api/products/cmh837vkd000f7kfs1rwvjnup
+
+# Create product
+curl -X POST http://localhost:3000/api/products \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "New Product",
+    "description": "Description",
+    "price": 2999,
+    "stock": 50,
+    "sellerId": "cmh837t2e00017kfs5guwauz9"
+  }'
+
+# Reserve stock
+curl -X POST http://localhost:3000/api/products/:id/stock-events \
+  -H "Content-Type: application/json" \
+  -d '{ "type": "RESERVATION", "quantity": -5, "reason": "Order #123" }'
+
+# Update product
+curl -X PATCH http://localhost:3000/api/products/:id \
+  -H "Content-Type: application/json" \
+  -d '{ "price": 3999 }'
+
+# Delete product
+# Delete product
+curl -X DELETE http://localhost:3000/api/products/:id
+```
+
+### Stock Events API
+
+The Stock Events API provides immutable event-based stock management with complete audit trail.
+
+**Endpoints:**
+
+**1. Calculate Current Stock**
+```
+GET /api/products/:id/stock
+```
+Returns the current calculated stock level for a product.
+
+**Response:**
+```json
+{
+  "productId": "cmh8542sp00027kxcz3ne0622",
+  "productName": "Wireless Mouse",
+  "currentStock": 14,
+  "totalEvents": 4,
+  "lastUpdated": "2025-10-26T20:04:12.004Z"
+}
+```
+
+**2. Get Stock Events for a Product**
+```
+GET /api/products/:id/stock-events
+```
+Returns all stock events and current calculated stock.
+
+**Response:**
+```json
+{
+  "productId": "cmh8542sp00027kxcz3ne0622",
+  "currentStock": 14,
+  "totalEvents": 4,
+  "events": [
+    {
+      "id": "event_id_1",
+      "productId": "cmh8542sp00027kxcz3ne0622",
+      "type": "INITIAL",
+      "quantity": 10,
+      "reason": "Initial stock",
+      "createdAt": "2025-10-26T20:04:08.360Z"
+    },
+    {
+      "id": "event_id_2",
+      "productId": "cmh8542sp00027kxcz3ne0622",
+      "type": "RESERVATION",
+      "quantity": -3,
+      "reason": "Reservation for 3 units",
+      "createdAt": "2025-10-26T20:04:09.729Z"
+    }
+  ]
+}
+```
+
+**2. Record a Stock Event**
+```
+POST /api/products/:id/stock-events
+Content-Type: application/json
+
+{
+  "type": "RESERVATION | CANCELLATION | RESTOCK",
+  "quantity": -5,
+  "reason": "Optional reason"
+}
+```
+
+**Event Types:**
+- `RESERVATION`: Reduce stock (quantity negative, e.g., -5)
+- `RESTOCK`: Add stock (quantity positive, e.g., 10)
+- `CANCELLATION`: Restore stock (quantity positive, e.g., 2)
+
+**Response:**
+```json
+{
+  "success": true,
+  "event": {
+    "id": "event_id_new",
+    "productId": "cmh8542sp00027kxcz3ne0622",
+    "type": "RESERVATION",
+    "quantity": -5,
+    "reason": "Order #123",
+    "createdAt": "2025-10-26T20:04:15.000Z"
+  },
+  "currentStock": 9
+}
+```
+
+**Test Examples:**
+```bash
+# Get current stock (simple calculation)
+curl http://localhost:3000/api/products/{id}/stock
+
+# Get stock history (with all events)
+curl http://localhost:3000/api/products/{id}/stock-events
+
+# Reserve stock (reserve 5 units)
+curl -X POST http://localhost:3000/api/products/{id}/stock-events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "RESERVATION",
+    "quantity": -5,
+    "reason": "Order #123"
+  }'
+
+# Restock (add 10 units)
+curl -X POST http://localhost:3000/api/products/{id}/stock-events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "RESTOCK",
+    "quantity": 10,
+    "reason": "Warehouse delivery"
+  }'
+
+# Cancel reservation (restore 2 units)
+curl -X POST http://localhost:3000/api/products/{id}/stock-events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "CANCELLATION",
+    "quantity": 2,
+    "reason": "Customer cancellation"
+  }'
+```
+
+**Key Features:**
+- ✅ Immutable Event Sourcing - All stock changes recorded as events, never mutated
+- ✅ Complete Audit Trail - Full history with timestamps and reasons
+- ✅ Pure Functional Calculation - Stock computed via fold over events
+- ✅ No Race Conditions - Event recording is atomic and sequential
+- ✅ Historical Replay - Can replay events to see stock at any point in time
+
+See [`API_STOCK_EVENTS.md`](./API_STOCK_EVENTS.md) for detailed API documentation.
+
+#### Product Service Functions
+```
+
 ## 🔑 Key Functional Programming Concepts
 
 ### 1. Type-Safe State Machine
@@ -155,6 +415,23 @@ const combineSalesStats = (a: SalesStats, b: SalesStats): SalesStats => ({
 // Calculate balance by folding over events
 const calculateBalance = (events: BalanceEvent[]): number =>
   events.reduce((acc, event) => acc + event.amount, 0);
+```
+
+### 5. Immutable Stock Management (Event Sourcing)
+```typescript
+// Pure function: Calculate stock from event history
+export const calculateStockFromEvents = (events: StockEventRecord[]): number =>
+  events.reduce((acc, event) => acc + event.quantity, 0);
+
+// Record stock changes as immutable events instead of mutating state
+type StockEvent = 
+  | { type: 'INITIAL'; quantity: number }
+  | { type: 'RESERVATION'; quantity: number }  // negative
+  | { type: 'CANCELLATION'; quantity: number } // positive
+  | { type: 'RESTOCK'; quantity: number };     // positive
+
+// Stock is never directly mutated - calculated from entire event history
+// This provides complete audit trail and enables event replay
 ```
 
 ## 📁 Project Structure
